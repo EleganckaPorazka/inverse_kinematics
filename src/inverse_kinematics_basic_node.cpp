@@ -99,7 +99,8 @@ void InverseKinematicsNode::JacobianStampedCallback(const rrlib_interfaces::msg:
     else
     {
         // get the Jacobian matrix "jacobian_" from the JacobianStamped type msg
-        jacobian_ = Eigen::Map<const Eigen::MatrixXd, Eigen::Unaligned>(msg.jacobian.jacobian_data.data(), 6 * inverse_kinematics_.GetDOF());
+        //~ jacobian_ = Eigen::Map<const Eigen::Matrix<double, 6, Eigen::Dynamic>, Eigen::Unaligned>(msg.jacobian.jacobian_data.data());
+        jacobian_ = Eigen::Map<const Eigen::MatrixXd>(&msg.jacobian.jacobian_data[0], 6, inverse_kinematics_.GetDOF()); //TODO: check this
     }
 }
 
@@ -119,7 +120,6 @@ void InverseKinematicsNode::CartesianTrajectoryCallback(const rrlib_interfaces::
     // get the desired end effector trajectory
     Eigen::VectorXd pose_des = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.positions.data(), 7);
     Eigen::VectorXd vel_des = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.velocities.data(), 7);
-    auto time_from_start = msg.time_from_start;
     
     // get the solution of the forward kinematics problem (end effector pose and manipulator's Jacobian)
     Eigen::VectorXd pose_FK = pose_;
@@ -142,6 +142,7 @@ void InverseKinematicsNode::CartesianTrajectoryCallback(const rrlib_interfaces::
     // d2qdt2 = (dqdt - dqdt_prev_) / dt;
     //~ std::vector<double> accelerations(d2qdt2.data(), d2qdt2.data() + d2qdt2.size());
     //~ joint_trajectory_point.accelerations = accelerations;
+    joint_trajectory_point.time_from_start = msg.time_from_start;
     publisher_joint_trajectory_->publish(joint_trajectory_point);
 }
 
