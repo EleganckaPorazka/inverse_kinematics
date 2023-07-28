@@ -39,7 +39,7 @@ private:
     InverseKinematics inverse_kinematics_;
     Eigen::VectorXd q_msr_;
     Eigen::MatrixXd jacobian_;
-    Eigen::VectorXd pose_(7);
+    Eigen::VectorXd pose_;
     
 };
 
@@ -47,20 +47,21 @@ InverseKinematicsNode::InverseKinematicsNode()
 : Node("inverse_kinematics_basic")
 {
     //initialize subscribers, publisher, etc.
+    pose_.resize(7);
 }
 
 void InverseKinematicsNode::SetParameters(const rclcpp::Parameter & p)
 {
-    if (dt <= 0.0 or clik_gain_pos < 0.0 or clik_gain_pos >= 2.0/dt or clik_gain_ori < 0.0 or clik_gain_ori >= 2.0/dt)
-    {
-        std::string message;
-        message = "Parameters are not set. Please, provide the correct values:\n->dt shall be greater than zero,\nclik_gain_pos and clik_gain_ori shall be greater than or equal to zero and smaller than 2/dt.\n";
-        std::cout << message;
-    }
-    else
-    {
-        inverse_kinematics_.SetParameters(dt, DOF, clik_gain_pos, clik_gain_ori);
-    }
+    //~ if (dt <= 0.0 or clik_gain_pos < 0.0 or clik_gain_pos >= 2.0/dt or clik_gain_ori < 0.0 or clik_gain_ori >= 2.0/dt)
+    //~ {
+        //~ std::string message;
+        //~ message = "Parameters are not set. Please, provide the correct values:\n->dt shall be greater than zero,\nclik_gain_pos and clik_gain_ori shall be greater than or equal to zero and smaller than 2/dt.\n";
+        //~ std::cout << message;
+    //~ }
+    //~ else
+    //~ {
+        //~ inverse_kinematics_.SetParameters(dt, DOF, clik_gain_pos, clik_gain_ori);
+    //~ }
 }
 
 void InverseKinematicsNode::JointStateCallback(const sensor_msgs::msg::JointState & msg)
@@ -115,12 +116,33 @@ void InverseKinematicsNode::PoseStampedCallback(const geometry_msgs::msg::PoseSt
 
 void InverseKinematicsNode::CartesianTrajectoryCallback(const rrlib_interfaces::msg::CartesianTrajectoryPoint & msg)
 {
-    // get the desired EE trajectory, solve the IK, publish the results
+    // get the desired end effector trajectory
+    Eigen::VectorXd pose_des = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.positions.data(), 7);
+    Eigen::VectorXd vel_des = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.velocities.data(), 7);
+    auto time_from_start = msg.time_from_start;
+    
+    // get the solution of the forward kinematics problem (end effector pose and manipulator's Jacobian)
     Eigen::VectorXd pose_FK = pose_;
     Eigen::MatrixXd J = jacobian_;
+    // get the current measured joint position (new joint position is computed as: q += dqdt * dt
     Eigen::VectorXd q = q_msr_;
+    // declare the joint velocity vector
     Eigen::VectorXd dqdt;
-    inverse_kinematics_.SolveIK(pose_FK, J, pose_des, vel_des, q, dqdt);
+    
+    // solve the inverse kinematics problem
+    inverse_kinematics_.SolveIK(pose_FK, J, pose_des, vel_des, &q, &dqdt);
+    
+    // publish the solution
+    trajectory_msgs::msg::JointTrajectoryPoint joint_trajectory_point;
+    std::vector<double> positions(q.data(), q.data() + q.size());
+    joint_trajectory_point.positions = positions;
+    std::vector<double> velocities(dqdt.data(), dqdt.data() + dqdt.size());
+    joint_trajectory_point.velocities = velocities;
+    // TODO: maybe dqdt from the previous step also should be stored as a class member dqdt_prev_; then, the acceleration could be computed as:
+    // d2qdt2 = (dqdt - dqdt_prev_) / dt;
+    //~ std::vector<double> accelerations(d2qdt2.data(), d2qdt2.data() + d2qdt2.size());
+    //~ joint_trajectory_point.accelerations = accelerations;
+    publisher_joint_trajectory_->publish(joint_trajectory_point);
 }
 
 } // namespace rrlib
