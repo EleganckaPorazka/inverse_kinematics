@@ -32,7 +32,15 @@ colcon build
 
 ## Running
 
-
+```
+ros2 run inverse_kinematics inverse_kinematics_basic
+```
+Example:
+```
+ros2 param set /inverse_kinematics_basic DOF '7'
+ros2 param set /inverse_kinematics_basic dt '0.005'
+ros2 param set /inverse_kinematics_basic '[100.0, 1.0]'
+```
 
 ## Notes
 
