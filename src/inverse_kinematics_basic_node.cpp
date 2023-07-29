@@ -4,7 +4,7 @@
 #include <iostream>
 #include <string>
 #include <eigen3/Eigen/Dense>
-#include "inverse_kinematics/inverse_kinematics.hpp"
+#include "inverse_kinematics/inverse_kinematics_basic.hpp"
 #include "inverse_kinematics/helper_functions.hpp"
 #include "rrlib_interfaces/msg/jacobian_stamped.hpp"
 #include "rrlib_interfaces/msg/cartesian_trajectory_point.hpp"
@@ -20,7 +20,7 @@ class InverseKinematicsNode : public rclcpp::Node
 {
 public:
     InverseKinematicsNode();
-    void SetParameters(const rclcpp::Parameter & p);
+    void SetParameter(const rclcpp::Parameter & p);
     void solveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt );
     
 private:
@@ -40,17 +40,45 @@ private:
     Eigen::VectorXd q_msr_;
     Eigen::MatrixXd jacobian_;
     Eigen::VectorXd pose_;
-    
+    size_t DOF_;
 };
 
 InverseKinematicsNode::InverseKinematicsNode()
 : Node("inverse_kinematics_basic")
 {
+    using std::placeholders::_1;
+    
+    RCLCPP_INFO(this->get_logger(), "Starting the node.");
     //initialize subscribers, publisher, etc.
     pose_.resize(7);
+    DOF_ = 0;
+    
+    this->declare_parameter("DOF", 0);
+    this->declare_parameter("dt", 0);
+    std::vector<double> clik_gains = {0.0, 0.0};
+    this->declare_parameter("clik_gains", clik_gains);
+    
+    // create a joint_states subscriber to get the joint positions
+    subscription_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states", 10, std::bind(&LWRForwardKinematicsNode::TopicCallback, this, _1));
+    // create a publisher for the tool pose
+    publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("fwd_kin_pose", 10);
+    // create a publisher for the Jacobian
+    publisher_jacobian_ = this->create_publisher<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian", 10);
+    // create a parameter subscriber 
+    param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
+    
+    //Check this tutorial: https://roboticsbackend.com/rclcpp-params-tutorial-get-set-ros2-params-with-cpp/
+    // set a callback for this node's parameters
+    auto cb = [this](const rclcpp::Parameter & p) {
+        RCLCPP_INFO(
+          this->get_logger(), "Received an update to parameter \"%s\".", 
+          p.get_name().c_str());
+          SetParameter(p);
+      };
+    cb_handle_ = param_subscriber_->add_parameter_callback("tool", cb);
 }
 
-void InverseKinematicsNode::SetParameters(const rclcpp::Parameter & p)
+void InverseKinematicsNode::SetParameter(const rclcpp::Parameter & p)
 {
     //~ if (dt <= 0.0 or clik_gain_pos < 0.0 or clik_gain_pos >= 2.0/dt or clik_gain_ori < 0.0 or clik_gain_ori >= 2.0/dt)
     //~ {
@@ -68,39 +96,39 @@ void InverseKinematicsNode::JointStateCallback(const sensor_msgs::msg::JointStat
 {
     // get the joint state, save it to class member variable
     
-    if (msg.position.size() < inverse_kinematics_.GetDOF())
+    if (msg.position.size() < DOF_)
     {
         RCLCPP_ERROR_THROTTLE(this->get_logger(),
             *this->get_clock(),
             5000,
             "To solve the inverse kinematics problem, there are %ld joint variables required, not %ld.",
-            inverse_kinematics_.GetDOF(),
+            DOF_,
             msg.position.size());
     }
     else
     {
         // get the joint position vector "q" from the JointState type msg
-        q_msr_ = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.position.data(), inverse_kinematics_.GetDOF());
+        q_msr_ = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.position.data(), DOF_);
     }
 }
 
 void InverseKinematicsNode::JacobianStampedCallback(const rrlib_interfaces::msg::JacobianStamped & msg)
 {
     // get the Jacobian, save it to class member variable
-    if (msg.jacobian.jacobian_data.size() < (6 * inverse_kinematics_.GetDOF()) )
+    if (msg.jacobian.jacobian_data.size() < (6 * DOF_))
     {
         RCLCPP_ERROR_THROTTLE(this->get_logger(),
             *this->get_clock(),
             5000,
-            "To solve the inverse kinematics problem, there are %ld joint variables required, not %ld.",
-            inverse_kinematics_.GetDOF(),
-            msg.jacobian.jacobian_data.size());
+            "To solve the inverse kinematics problem, the Jacobian shall be of the size 6x%ld.",
+            DOF_);
     }
     else
     {
         // get the Jacobian matrix "jacobian_" from the JacobianStamped type msg
         //~ jacobian_ = Eigen::Map<const Eigen::Matrix<double, 6, Eigen::Dynamic>, Eigen::Unaligned>(msg.jacobian.jacobian_data.data());
-        jacobian_ = Eigen::Map<const Eigen::MatrixXd>(&msg.jacobian.jacobian_data[0], 6, inverse_kinematics_.GetDOF()); //TODO: check this
+        jacobian_ = Eigen::Map<const Eigen::MatrixXd>(&msg.jacobian.jacobian_data[0], 6, DOF_); //TODO: check this
+        //~ jacobian_ = Eigen::Map<const Eigen::MatrixXd, Eigen::Unaligned>(msg.jacobian.jacobian_data.data(), 6, DOF_); 
     }
 }
 

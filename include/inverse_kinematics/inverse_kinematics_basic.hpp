@@ -1,8 +1,8 @@
 //~ Copyright (C) 2023 Łukasz Woliński
 //~ You may use, distribute and modify this code under the terms of the BSD-3-Clause License.
 
-#ifndef INV_KIN_H
-#define INV_KIN_H
+#ifndef INV_KIN_BASIC_H
+#define INV_KIN_BASIC_H
 
 #include <iostream>
 #include <string>
@@ -15,9 +15,8 @@ class InverseKinematics
 {
 public:
     InverseKinematics();
-    void SetParameters( double dt, size_t DOF, double clik_gain_pos, double clik_gain_ori );
-    bool areParametersOK();
-    size_t GetDOF();
+    void SetTimeStep(double dt);
+    void SetCLIKGain(double clik_gain_pos, double clik_gain_ori);
     void SolveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt );
     Eigen::VectorXd PoseError( const Eigen::VectorXd& pose_des, const Eigen::VectorXd& pose_FK );
     
@@ -32,28 +31,20 @@ InverseKinematics::InverseKinematics()
 {
     /* Default parameters are zero. User shall use setParameters to assign them the proper values before computing the solution to the inverse kinematics problem.*/
     dt_ = 0.0;
+    DOF_ = 0;
     clik_gain_ = Eigen::MatrixXd::Zero(6, 6);
-    PARAMETERS_OK_ = false;
 }
 
-void InverseKinematics::SetParameters( double dt, size_t DOF, double clik_gain_pos, double clik_gain_ori )
+void InverseKinematics::SetTimeStep(double dt)
 {
     dt_ = dt;
-    DOF_ = DOF;
+}
+
+void InverseKinematics::SetCLIKGain(double clik_gain_pos, double clik_gain_ori)
+{
     clik_gain_ = Eigen::MatrixXd::Zero(6, 6);
     clik_gain_.block(0, 0, 3, 3) = clik_gain_pos * Eigen::Matrix3d::Identity();
     clik_gain_.block(3, 3, 3, 3) = clik_gain_ori * Eigen::Matrix3d::Identity();
-    PARAMETERS_OK_ = true;
-}
-
-bool InverseKinematics::areParametersOK()
-{
-    return PARAMETERS_OK_;
-}
-
-size_t InverseKinematics::GetDOF()
-{
-    return DOF_;
 }
 
 void InverseKinematics::SolveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt )
@@ -83,4 +74,4 @@ Eigen::VectorXd InverseKinematics::PoseError( const Eigen::VectorXd& pose_des, c
 
 } // namespace rrlib
 
-#endif // INV_KIN_H
+#endif // INV_KIN_BASIC_H
