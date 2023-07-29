@@ -10,6 +10,7 @@
 #include "rrlib_interfaces/msg/cartesian_trajectory_point.hpp"
 
 #include "rclcpp/rclcpp.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
@@ -20,76 +21,184 @@ class InverseKinematicsNode : public rclcpp::Node
 {
 public:
     InverseKinematicsNode();
-    void SetParameter(const rclcpp::Parameter & p);
     void solveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt );
     
 private:
+    rcl_interfaces::msg::SetParametersResult ParametersCallback(const std::vector<rclcpp::Parameter> &parameters);
     void JointStateCallback(const sensor_msgs::msg::JointState & msg);
-    void JacobianStampedCallback(const rrlib_interfaces::msg::JacobianStamped & msg);
     void PoseStampedCallback(const geometry_msgs::msg::PoseStamped & msg);
+    void JacobianStampedCallback(const rrlib_interfaces::msg::JacobianStamped & msg);
     void CartesianTrajectoryCallback(const rrlib_interfaces::msg::CartesianTrajectoryPoint & msg);
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr subscription_joint_state_;
-    rclcpp::Subscription<rrlib_interfaces::msg::JacobianStamped>::SharedPtr subscription_jacobian_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr subscription_pose_;
+    rclcpp::Subscription<rrlib_interfaces::msg::JacobianStamped>::SharedPtr subscription_jacobian_;
     rclcpp::Subscription<rrlib_interfaces::msg::CartesianTrajectoryPoint>::SharedPtr subscription_cart_trajectory_;
     rclcpp::Publisher<trajectory_msgs::msg::JointTrajectoryPoint>::SharedPtr publisher_joint_trajectory_;
-    std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
-    std::shared_ptr<rclcpp::ParameterCallbackHandle> cb_handle_;
     
+    double dt_;     // time step (in seconds)
+    size_t DOF_;    // number of degrees of freedom of the manipulator
+    bool PARAMETERS_OK_;  // a flag to be set to true if the parameters are viable for the inverse kinematics computation, and false otherwise
     InverseKinematics inverse_kinematics_;
-    Eigen::VectorXd q_msr_;
-    Eigen::MatrixXd jacobian_;
-    Eigen::VectorXd pose_;
-    size_t DOF_;
+    Eigen::VectorXd pose_;      // the end effector pose from the forward kinematics solver (position and orientation, 7 elements)
+    Eigen::MatrixXd jacobian_;  // the Jacobian from the forward kinematics solver (size: 6xDOF_)
+    Eigen::VectorXd q_msr_;     // measured joint positions (in radians, size: DOF_)
 };
 
 InverseKinematicsNode::InverseKinematicsNode()
 : Node("inverse_kinematics_basic")
 {
+    //initialize subscribers, publisher, parameters, etc.
     using std::placeholders::_1;
     
     RCLCPP_INFO(this->get_logger(), "Starting the node.");
-    //initialize subscribers, publisher, etc.
-    pose_.resize(7);
-    DOF_ = 0;
     
+    dt_ = 0.0;
+    DOF_ = 1; // should be 0, but what if the node starts without setting the parameters and then tries to read the Jacobian into a 6x0 matrix? 
+    PARAMETERS_OK_ = false;
+    pose_.resize(7);
+    
+    // declare parameters and create the callback for handling their changes
     this->declare_parameter("DOF", 0);
-    this->declare_parameter("dt", 0);
+    this->declare_parameter("dt", 0.0);
     std::vector<double> clik_gains = {0.0, 0.0};
     this->declare_parameter("clik_gains", clik_gains);
+    this->set_on_parameters_set_callback(std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
     
     // create a joint_states subscriber to get the joint positions
-    subscription_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states", 10, std::bind(&LWRForwardKinematicsNode::TopicCallback, this, _1));
-    // create a publisher for the tool pose
+    subscription_joint_state_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states",
+        10,
+        std::bind(&InverseKinematicsNode::JointStateCallback,
+        this,
+        _1));
+    // create a subscription for the end effector pose
+    subscription_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("",
+        10,
+        std::bind(&InverseKinematicsNode::PoseStampedCallback,
+        this,
+        _1);
+    // create a subscription for the Jacobian
+    subscription_jacobian_ =
+    // create a subscription for the desired end effector pose and velocity
+    subscription_cart_trajectory_ = 
+    // create a publisher for the joint trajectory point
+    publisher_joint_trajectory_ = 
     publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("fwd_kin_pose", 10);
     // create a publisher for the Jacobian
     publisher_jacobian_ = this->create_publisher<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian", 10);
-    // create a parameter subscriber 
-    param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
-    
-    //Check this tutorial: https://roboticsbackend.com/rclcpp-params-tutorial-get-set-ros2-params-with-cpp/
-    // set a callback for this node's parameters
-    auto cb = [this](const rclcpp::Parameter & p) {
-        RCLCPP_INFO(
-          this->get_logger(), "Received an update to parameter \"%s\".", 
-          p.get_name().c_str());
-          SetParameter(p);
-      };
-    cb_handle_ = param_subscriber_->add_parameter_callback("tool", cb);
 }
 
-void InverseKinematicsNode::SetParameter(const rclcpp::Parameter & p)
+rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallback(const std::vector<rclcpp::Parameter> &parameters)
 {
-    //~ if (dt <= 0.0 or clik_gain_pos < 0.0 or clik_gain_pos >= 2.0/dt or clik_gain_ori < 0.0 or clik_gain_ori >= 2.0/dt)
-    //~ {
-        //~ std::string message;
-        //~ message = "Parameters are not set. Please, provide the correct values:\n->dt shall be greater than zero,\nclik_gain_pos and clik_gain_ori shall be greater than or equal to zero and smaller than 2/dt.\n";
-        //~ std::cout << message;
-    //~ }
-    //~ else
-    //~ {
-        //~ inverse_kinematics_.SetParameters(dt, DOF, clik_gain_pos, clik_gain_ori);
-    //~ }
+    // Helpful manuals and tutorials for this:
+    // https://docs.ros.org/en/humble/Tutorials/Intermediate/Monitoring-For-Parameter-Changes-CPP.html
+    // https://roboticsbackend.com/rclcpp-params-tutorial-get-set-ros2-params-with-cpp/
+    // https://roboticsbackend.com/ros2-rclcpp-parameter-callback/
+    
+    rcl_interfaces::msg::SetParametersResult result;
+    //TODO: do something with result.successful and result.reason
+    result.successful = false;
+    result.reason = "";
+    //TODO: do it better:
+    bool result_DOF = false;
+    bool result_dt = false;
+    bool result_clik_gains = false;
+    
+    for (const auto &param : parameters)
+    {
+        if (param.get_name() == "DOF")
+        {
+            if (param.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER)
+            {
+                if (param.as_int() > 0)
+                {
+                    DOF_ = param.as_int();
+                    inverse_kinematics_.SetDOF(DOF_);
+                    result.succesful = true;
+                    result_DOF = true;
+                }
+                else
+                {
+                    RCLCPP_WARN(this->get_logger(), "The parameter \"%s\" shall be greater than 0.", param.get_name().c_str());
+                    result.successful = false;
+                    result.reason = "The number of degrees of freedom (DOF) shall be greater than 0.";
+                    result_DOF = false;
+                }
+            }
+        }
+        if (param.get_name() == "dt")
+        {
+            if (param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE)
+            {
+                if (param.as_double() > 0.0)
+                {
+                    dt_ = param.as_double();
+                    inverse_kinematics_.SetTimeStep(dt_);
+                    result.successful = true;
+                    result_dt = true;
+                }
+                else
+                {
+                    RCLCPP_WARN(this->get_logger(), "The parameter \"%s\" shall be greater than 0.0.", param.get_name().c_str());
+                    result.successful = false;
+                    result.reason = "Time step dt has to be greater than 0.0.";
+                    result_dt = false;
+                }
+            }
+        }
+        if (param.get_name() == "clik_gains")
+        {
+            if (param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY)
+            {
+                if (param.as_double_array().size() == 2)
+                {
+                    if (dt_ > 0.0)
+                    {
+                        if (param.as_double_array()[0] >= 0.0
+                            and param.as_double_array()[0] < (2.0 / dt_)
+                            and param.as_double_array()[1] >= 0.0
+                            and param.as_double_array()[1] < (2.0 / dt_))
+                        {
+                            inverse_kinematics_.SetCLIKGain(param.as_double_array()[0], param.as_double_array()[1]);
+                            result.successful = true;
+                            result_clik_gains = true;
+                        }
+                        else
+                        {
+                            RCLCPP_WARN(this->get_logger(), "The parameter \"%s\" shall have both elements greater than 0.0\
+                             and smaller than 2.0/dt (in this case: %lf).", param.get_name().c_str(), dt_);
+                            result.successful = false;
+                            result.reason = "CLIK gains shall be greater than 0.0 and smaller than 2.0/dt.";
+                            result_clik_gains = false;
+                        }
+                    }
+                    else
+                    {
+                        RCLCPP_WARN(this->get_logger(), "Set time step dt first.");
+                        result_clik_gains = false;
+                    }
+                }
+            }
+        }
+    }
+    
+    if (result_DOF == true and result_dt == true and result_clik_gains == true)
+    {
+        result.successful = true;
+        result.reason = "All parameters have proper values."
+        // If all the parameters have been set, then PARAMETERS_OK_ becomes true.
+        // If at some point, there will be an attempt to change some parameter to a wrong value,
+        // that change won't be accepted. Therefore, the old set of proper parameters will continue
+        // to be used. Thus there is no need to change PARAMETERS_OK_ to false in such a case.
+        // (At least that's what I wanted to achieve)
+        PARAMETERS_OK_ = true;
+    }
+    else
+    {
+        result.successful = false;
+        result.reason = "Some of the parameters have wrong types or values."
+    }
+    
+    return result;
 }
 
 void InverseKinematicsNode::JointStateCallback(const sensor_msgs::msg::JointState & msg)
@@ -112,6 +221,17 @@ void InverseKinematicsNode::JointStateCallback(const sensor_msgs::msg::JointStat
     }
 }
 
+void InverseKinematicsNode::PoseStampedCallback(const geometry_msgs::msg::PoseStamped & msg)
+{
+    pose_(0) = msg.pose.position.x;
+    pose_(1) = msg.pose.position.y;
+    pose_(2) = msg.pose.position.z;
+    pose_(3) = msg.pose.orientation.x;
+    pose_(4) = msg.pose.orientation.y;
+    pose_(5) = msg.pose.orientation.z;
+    pose_(6) = msg.pose.orientation.w;
+}
+
 void InverseKinematicsNode::JacobianStampedCallback(const rrlib_interfaces::msg::JacobianStamped & msg)
 {
     // get the Jacobian, save it to class member variable
@@ -130,17 +250,6 @@ void InverseKinematicsNode::JacobianStampedCallback(const rrlib_interfaces::msg:
         jacobian_ = Eigen::Map<const Eigen::MatrixXd>(&msg.jacobian.jacobian_data[0], 6, DOF_); //TODO: check this
         //~ jacobian_ = Eigen::Map<const Eigen::MatrixXd, Eigen::Unaligned>(msg.jacobian.jacobian_data.data(), 6, DOF_); 
     }
-}
-
-void InverseKinematicsNode::PoseStampedCallback(const geometry_msgs::msg::PoseStamped & msg)
-{
-    pose_(0) = msg.pose.position.x;
-    pose_(1) = msg.pose.position.y;
-    pose_(2) = msg.pose.position.z;
-    pose_(3) = msg.pose.orientation.x;
-    pose_(4) = msg.pose.orientation.y;
-    pose_(5) = msg.pose.orientation.z;
-    pose_(6) = msg.pose.orientation.w;
 }
 
 void InverseKinematicsNode::CartesianTrajectoryCallback(const rrlib_interfaces::msg::CartesianTrajectoryPoint & msg)

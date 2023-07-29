@@ -16,6 +16,7 @@ class InverseKinematics
 public:
     InverseKinematics();
     void SetTimeStep(double dt);
+    void SetDOF(size_t DOF);
     void SetCLIKGain(double clik_gain_pos, double clik_gain_ori);
     void SolveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt );
     Eigen::VectorXd PoseError( const Eigen::VectorXd& pose_des, const Eigen::VectorXd& pose_FK );
@@ -24,7 +25,6 @@ private:
     double dt_;                     // time step
     size_t DOF_;                    // numbmer of degrees of freedom of the manipulator
     Eigen::MatrixXd clik_gain_;     // gain for the Closed Inverse Kinematics (CLIK)
-    bool PARAMETERS_OK_;            // a flag to be set to true if the parameters are viable for the inverse kinematics computation, and false otherwise
 };
 
 InverseKinematics::InverseKinematics()
@@ -38,6 +38,11 @@ InverseKinematics::InverseKinematics()
 void InverseKinematics::SetTimeStep(double dt)
 {
     dt_ = dt;
+}
+
+void InverseKinematics::SetDOF(size_t DOF)
+{
+    DOF_ = DOF;
 }
 
 void InverseKinematics::SetCLIKGain(double clik_gain_pos, double clik_gain_ori)
