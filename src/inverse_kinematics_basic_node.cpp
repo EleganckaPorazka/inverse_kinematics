@@ -25,6 +25,7 @@ public:
     
 private:
     rcl_interfaces::msg::SetParametersResult ParametersCallback(const std::vector<rclcpp::Parameter> &parameters);
+    OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
     void JointStateCallback(const sensor_msgs::msg::JointState & msg);
     void PoseStampedCallback(const geometry_msgs::msg::PoseStamped & msg);
     void JacobianStampedCallback(const rrlib_interfaces::msg::JacobianStamped & msg);
@@ -63,10 +64,8 @@ InverseKinematicsNode::InverseKinematicsNode()
     this->declare_parameter("dt", 0.0);
     std::vector<double> clik_gains = {0.0, 0.0};
     this->declare_parameter("clik_gains", clik_gains);
-    // TODO: warning: ignoring return value of ‘rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
-    // rclcpp::Node::add_on_set_parameters_callback(rclcpp::Node::OnParametersSetCallbackType)’,
-    // declared with attribute ‘warn_unused_result’ [-Wunused-result]
-    this->add_on_set_parameters_callback(std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
+    parameter_callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
     
     // create a joint_states subscriber to get the joint positions
     subscription_joint_state_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states",
@@ -102,6 +101,8 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
     // https://docs.ros.org/en/humble/Tutorials/Intermediate/Monitoring-For-Parameter-Changes-CPP.html
     // https://roboticsbackend.com/rclcpp-params-tutorial-get-set-ros2-params-with-cpp/
     // https://roboticsbackend.com/ros2-rclcpp-parameter-callback/
+    
+    RCLCPP_INFO(this->get_logger(), "Received a parameter update.");
     
     rcl_interfaces::msg::SetParametersResult result;
     //TODO: do something with result.successful and result.reason
@@ -173,8 +174,9 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                         }
                         else
                         {
-                            RCLCPP_WARN(this->get_logger(), "The parameter \"%s\" shall have both elements greater than 0.0\
-                             and smaller than 2.0/dt (in this case: %lf).", param.get_name().c_str(), dt_);
+                            RCLCPP_WARN(this->get_logger(),
+                            "The parameter \"%s\" shall have both elements greater than 0.0 and smaller than 2.0/dt (in this case: %lf).",
+                            param.get_name().c_str(), (2.0/dt_));
                             result.successful = false;
                             result.reason = "CLIK gains shall be greater than 0.0 and smaller than 2.0/dt.";
                             result_clik_gains = false;
@@ -201,11 +203,11 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
         // (At least that's what I wanted to achieve)
         PARAMETERS_OK_ = true;
     }
-    else
+    /*else
     {
         result.successful = false;
         result.reason = "Some of the parameters have wrong types or values.";
-    }
+    }*/
     
     return result;
 }
