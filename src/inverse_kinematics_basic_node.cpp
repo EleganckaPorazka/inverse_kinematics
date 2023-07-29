@@ -63,7 +63,10 @@ InverseKinematicsNode::InverseKinematicsNode()
     this->declare_parameter("dt", 0.0);
     std::vector<double> clik_gains = {0.0, 0.0};
     this->declare_parameter("clik_gains", clik_gains);
-    this->set_on_parameters_set_callback(std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
+    // TODO: warning: ignoring return value of ‘rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+    // rclcpp::Node::add_on_set_parameters_callback(rclcpp::Node::OnParametersSetCallbackType)’,
+    // declared with attribute ‘warn_unused_result’ [-Wunused-result]
+    this->add_on_set_parameters_callback(std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
     
     // create a joint_states subscriber to get the joint positions
     subscription_joint_state_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states",

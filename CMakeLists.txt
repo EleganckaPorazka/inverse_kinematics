@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(trajectory_msgs REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rrlib_interfaces REQUIRED)
@@ -20,6 +21,7 @@ add_executable(inverse_kinematics_basic src/inverse_kinematics_basic_node.cpp)
 ament_target_dependencies(inverse_kinematics_basic
   rclcpp
   trajectory_msgs
+  rcl_interfaces
   sensor_msgs
   geometry_msgs
   rrlib_interfaces)

@@ -11,6 +11,7 @@
   
   <depend>rclcpp</depend>
   <depend>trajectory_msgs</depend>
+  <depend>rcl_interfaces</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>rrlib_interfaces</depend>
