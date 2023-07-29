@@ -52,6 +52,7 @@ InverseKinematicsNode::InverseKinematicsNode()
     
     RCLCPP_INFO(this->get_logger(), "Starting the node.");
     
+    // initialize class members that better be initialized
     dt_ = 0.0;
     DOF_ = 1; // should be 0, but what if the node starts without setting the parameters and then tries to read the Jacobian into a 6x0 matrix? 
     PARAMETERS_OK_ = false;
@@ -71,20 +72,25 @@ InverseKinematicsNode::InverseKinematicsNode()
         this,
         _1));
     // create a subscription for the end effector pose
-    subscription_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("",
+    subscription_pose_ = this->create_subscription<geometry_msgs::msg::PoseStamped>("fwd_kin_pose",
         10,
         std::bind(&InverseKinematicsNode::PoseStampedCallback,
         this,
-        _1);
+        _1));
     // create a subscription for the Jacobian
-    subscription_jacobian_ =
+    subscription_jacobian_ = this->create_subscription<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian",
+        10,
+        std::bind(&InverseKinematicsNode::JacobianStampedCallback,
+        this,
+        _1));
     // create a subscription for the desired end effector pose and velocity
-    subscription_cart_trajectory_ = 
+    subscription_cart_trajectory_ = this->create_subscription<rrlib_interfaces::msg::CartesianTrajectoryPoint>("cart_sin_traj",
+        10,
+        std::bind(&InverseKinematicsNode::CartesianTrajectoryCallback,
+        this,
+        _1));
     // create a publisher for the joint trajectory point
-    publisher_joint_trajectory_ = 
-    publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("fwd_kin_pose", 10);
-    // create a publisher for the Jacobian
-    publisher_jacobian_ = this->create_publisher<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian", 10);
+    publisher_joint_trajectory_ = this->create_publisher<trajectory_msgs::msg::JointTrajectoryPoint>("ik_jnt_traj", 10);
 }
 
 rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallback(const std::vector<rclcpp::Parameter> &parameters)
@@ -113,7 +119,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                 {
                     DOF_ = param.as_int();
                     inverse_kinematics_.SetDOF(DOF_);
-                    result.succesful = true;
+                    result.successful = true;
                     result_DOF = true;
                 }
                 else
@@ -184,7 +190,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
     if (result_DOF == true and result_dt == true and result_clik_gains == true)
     {
         result.successful = true;
-        result.reason = "All parameters have proper values."
+        result.reason = "All parameters have proper values.";
         // If all the parameters have been set, then PARAMETERS_OK_ becomes true.
         // If at some point, there will be an attempt to change some parameter to a wrong value,
         // that change won't be accepted. Therefore, the old set of proper parameters will continue
@@ -195,7 +201,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
     else
     {
         result.successful = false;
-        result.reason = "Some of the parameters have wrong types or values."
+        result.reason = "Some of the parameters have wrong types or values.";
     }
     
     return result;
