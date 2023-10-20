@@ -1,0 +1,7 @@
+/inverse_kinematics_basic:
+  ros__parameters:
+    DOF: 7
+    clik_gains:
+    - 100.0
+    - 1.0
+    dt: 0.01
