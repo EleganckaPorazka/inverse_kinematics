@@ -67,6 +67,11 @@ InverseKinematicsNode::InverseKinematicsNode()
     parameter_callback_handle_ = this->add_on_set_parameters_callback(
         std::bind(&InverseKinematicsNode::ParametersCallback, this, _1));
     
+    // call explicitly the ParametersCallback to handle the parameter changes from the launcher
+    std::vector<std::string> param_names = {"DOF", "dt", "clik_gains"};
+    std::vector<rclcpp::Parameter> parameters = this->get_parameters(param_names);
+    rcl_interfaces::msg::SetParametersResult set_param_result = InverseKinematicsNode::ParametersCallback(parameters);
+    
     // create a joint_states subscriber to get the joint positions
     subscription_joint_state_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states",
         10,
@@ -125,6 +130,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                     inverse_kinematics_.SetDOF(DOF_);
                     result.successful = true;
                     result_DOF = true;
+                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
                 }
                 else
                 {
@@ -145,6 +151,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                     inverse_kinematics_.SetTimeStep(dt_);
                     result.successful = true;
                     result_dt = true;
+                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
                 }
                 else
                 {
@@ -171,6 +178,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                             inverse_kinematics_.SetCLIKGain(param.as_double_array()[0], param.as_double_array()[1]);
                             result.successful = true;
                             result_clik_gains = true;
+                            RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
                         }
                         else
                         {

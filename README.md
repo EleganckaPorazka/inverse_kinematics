@@ -41,9 +41,11 @@ ros2 param set /inverse_kinematics_basic DOF '7'
 ros2 param set /inverse_kinematics_basic dt '0.005'
 ros2 param set /inverse_kinematics_basic '[100.0, 1.0]'
 ```
+Or:
+```
+ros2 launch inverse_kinematics inv_kin.launch.py
+```
 
 ## Notes
-
-TODO: Can't get parameters from the yaml file: 'ros2 launch inverse_kinematics inv_kin.launch.py' or 'ros2 run inverse_kinematics inverse_kinematics_basic --ros-args --params-file ~/ros2_kuka/src/inverse_kinematics/config/IK_parameters.yaml' don't seem to work. Even 'ros2 run inverse_kinematics inverse_kinematics_basic --ros-args -p DOF:=7 -p dt:=0.01 -p clik_gains:="[100.0, 0.0]"' is not giving a desired effect. The command 'ros2 param dump /inverse_kinematics_basic' returns the parameters with proper values, but they don't seem to propagate to 'inverse_kinematics_basic_node.cpp'. Possibly, the whole parameter callback thing there is wrong. Frustrating.
 
 This code is also uploaded to [**my other repository**](https://gitlab.com/lwolinski/inverse_kinematics.git).
