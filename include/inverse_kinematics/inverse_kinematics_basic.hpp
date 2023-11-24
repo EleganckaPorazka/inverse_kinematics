@@ -18,6 +18,9 @@ public:
     void SetTimeStep(double dt);
     void SetDOF(size_t DOF);
     void SetCLIKGain(double clik_gain_pos, double clik_gain_ori);
+    double GetTimeStep();
+    size_t GetDOF();
+    Eigen::VectorXd GetCLIKGain();
     void SolveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt );
     Eigen::VectorXd PoseError( const Eigen::VectorXd& pose_des, const Eigen::VectorXd& pose_FK );
     
@@ -50,6 +53,24 @@ void InverseKinematics::SetCLIKGain(double clik_gain_pos, double clik_gain_ori)
     clik_gain_ = Eigen::MatrixXd::Zero(6, 6);
     clik_gain_.block(0, 0, 3, 3) = clik_gain_pos * Eigen::Matrix3d::Identity();
     clik_gain_.block(3, 3, 3, 3) = clik_gain_ori * Eigen::Matrix3d::Identity();
+}
+
+double InverseKinematics::GetTimeStep()
+{
+    return dt_;
+}
+
+size_t InverseKinematics::GetDOF()
+{
+    return DOF_;
+}
+
+Eigen::VectorXd InverseKinematics::GetCLIKGain()
+{
+    Eigen::VectorXd clik_gains(2);
+    clik_gains(0) = clik_gain_(0, 0);
+    clik_gains(1) = clik_gain_(3, 3);
+    return clik_gains;
 }
 
 void InverseKinematics::SolveIK( const Eigen::VectorXd& pose_FK, const Eigen::MatrixXd& J, const Eigen::VectorXd& pose_des, const Eigen::VectorXd& vel_des, Eigen::VectorXd* q, Eigen::VectorXd* dqdt )

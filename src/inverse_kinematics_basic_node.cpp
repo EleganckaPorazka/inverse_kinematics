@@ -130,7 +130,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                     inverse_kinematics_.SetDOF(DOF_);
                     result.successful = true;
                     result_DOF = true;
-                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
+                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated to value: %ld.", param.get_name().c_str(), inverse_kinematics_.GetDOF());
                 }
                 else
                 {
@@ -151,7 +151,7 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                     inverse_kinematics_.SetTimeStep(dt_);
                     result.successful = true;
                     result_dt = true;
-                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
+                    RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated to value: %lf.", param.get_name().c_str(), inverse_kinematics_.GetTimeStep());
                 }
                 else
                 {
@@ -178,7 +178,8 @@ rcl_interfaces::msg::SetParametersResult InverseKinematicsNode::ParametersCallba
                             inverse_kinematics_.SetCLIKGain(param.as_double_array()[0], param.as_double_array()[1]);
                             result.successful = true;
                             result_clik_gains = true;
-                            RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated.", param.get_name().c_str());
+                            Eigen::VectorXd clik_gains = inverse_kinematics_.GetCLIKGain();
+                            RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated to value: [%lf, %lf].", param.get_name().c_str(), clik_gains(0), clik_gains(1));
                         }
                         else
                         {
